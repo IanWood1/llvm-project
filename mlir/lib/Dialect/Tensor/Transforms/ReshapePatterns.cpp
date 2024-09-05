@@ -210,6 +210,18 @@ struct BubbleUpExpandThroughParallelCollapse
   }
 };
 
+/// Pattern to sink a tensor.expand_shape op through a consumer
+/// tensor.collapse_shape op that has non intersecting reassociations.
+struct SinkExpandThroughParallelCollapse
+    : public OpRewritePattern<tensor::ExpandShapeOp> {
+  using OpRewritePattern<tensor::ExpandShapeOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(tensor::ExpandShapeOp expandOp,
+                                PatternRewriter &rewriter) const override {
+    return failure();
+  }
+};
+
 } // namespace
 
 void mlir::tensor::populateReassociativeReshapeFoldingPatterns(
@@ -226,4 +238,9 @@ void mlir::tensor::populateReassociativeReshapeFoldingPatterns(
 void mlir::tensor::populateBubbleUpExpandShapePatterns(
     RewritePatternSet &patterns) {
   patterns.add<BubbleUpExpandThroughParallelCollapse>(patterns.getContext());
+}
+
+void mlir::tensor::populateSinkExpandShapePatterns(
+    RewritePatternSet &patterns) {
+  patterns.add<SinkExpandThroughParallelCollapse>(patterns.getContext());
 }

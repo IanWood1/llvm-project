@@ -71,6 +71,10 @@ void populateReassociativeReshapeFoldingPatterns(RewritePatternSet &patterns);
 /// through `tensor.collapse_shape` ops.
 void populateBubbleUpExpandShapePatterns(RewritePatternSet &patterns);
 
+/// Populates `patterns` with patterns that sink `tensor.expand_shape`
+/// through `tensor.collapse_shape` ops.
+void populateSinkExpandShapePatterns(RewritePatternSet &patterns);
+
 /// Populates `patterns` with patterns that fold tensor.empty with its
 /// consumers.
 ///
