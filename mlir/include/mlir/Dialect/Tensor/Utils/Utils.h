@@ -10,7 +10,9 @@
 #define MLIR_DIALECT_TENSOR_UTILS_UTILS_H_
 
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallSet.h"
 
 namespace mlir {
 namespace tensor {
@@ -61,19 +63,24 @@ bool isCastLikeInsertSliceOp(InsertSliceOp op);
 /// unit dimensions of the source tensor or extracts the entire source tensor.
 bool isCastLikeExtractSliceOp(ExtractSliceOp op);
 
-class TensorDimTrackingRewriter : public IRRewriter, IRRewriter::Listener {
+class TensorDimTrackingRewriter : public IRRewriter,
+                                  public IRRewriter::Listener {
 public:
   /// Create a new rewriter: Scan the given op for tensor::DimOps.
   TensorDimTrackingRewriter(Operation *op);
   /// Return all tracked tensor::DimOps.
-  SmallVector<tensor::DimOp> getTensorDimOps();
+  SmallVector<tensor::DimOp> getTensorDimOps() const;
+  /// Return the result of a `tensor.dim` ops that computes has has the same
+  /// `source` and `dim`.
+  FailureOr<tensor::DimOp> queryCachedDimOps(Value source, int64_t dim) const;
 
 protected:
   void notifyOperationErased(Operation *op) override;
   void notifyOperationInserted(Operation *op, InsertPoint previous) override;
 
 private:
-  SmallPtrSet<Operation *, 16> dimOps;
+  llvm::SmallDenseSet<tensor::DimOp, 16> dimOps;
+  llvm::DenseMap<Value, llvm::SmallDenseMap<uint64_t, tensor::DimOp>> cachedOps;
 };
 
 } // namespace tensor

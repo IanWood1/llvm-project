@@ -179,26 +179,45 @@ mlir::tensor::TensorDimTrackingRewriter::TensorDimTrackingRewriter(
     Operation *op)
     : IRRewriter(op->getContext()) {
   setListener(this);
-  op->walk([&](tensor::DimOp dimOp) { dimOps.insert(dimOp.getOperation()); });
+  op->walk([&](tensor::DimOp dimOp) { dimOps.insert(dimOp); });
 }
 
 SmallVector<tensor::DimOp>
-mlir::tensor::TensorDimTrackingRewriter::getTensorDimOps() {
-  SmallVector<tensor::DimOp> result;
-  for (Operation *op : dimOps)
-    result.push_back(cast<tensor::DimOp>(op));
-  return result;
+mlir::tensor::TensorDimTrackingRewriter::getTensorDimOps() const {
+  return llvm::to_vector(dimOps);
 }
+
 void mlir::tensor::TensorDimTrackingRewriter::notifyOperationErased(
     Operation *op) {
   IRRewriter::Listener::notifyOperationErased(op);
-  if (isa<tensor::DimOp>(op))
-    dimOps.erase(op);
+  if (auto dimOp = dyn_cast<tensor::DimOp>(op)) {
+    dimOps.erase(dimOp);
+    cachedOps.erase(dimOp.getResult());
+  }
 }
 
 void mlir::tensor::TensorDimTrackingRewriter::notifyOperationInserted(
     Operation *op, InsertPoint previous) {
   IRRewriter::Listener::notifyOperationInserted(op, previous);
-  if (isa<tensor::DimOp>(op))
-    dimOps.insert(op);
+  auto dimOp = dyn_cast<tensor::DimOp>(op);
+  if (!dimOp)
+    return;
+  dimOps.insert(dimOp);
+  auto constIdx = dimOp.getConstantIndex();
+  if (!constIdx)
+    return;
+  cachedOps[dimOp.getSource()][constIdx.value()] = dimOp;
+}
+
+FailureOr<tensor::DimOp>
+mlir::tensor::TensorDimTrackingRewriter::queryCachedDimOps(Value source,
+                                                           int64_t dim) const {
+  auto innerMapIt = cachedOps.find(source);
+  if (innerMapIt == cachedOps.end())
+    return failure();
+  auto opIt = innerMapIt->getSecond().find(dim);
+  if (opIt == innerMapIt->getSecond().end()) {
+    return failure();
+  }
+  return opIt->getSecond();
 }

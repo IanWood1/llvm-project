@@ -76,13 +76,13 @@ SmallVector<AffineExpr, 4> concat(ArrayRef<AffineExpr> a,
 /// This is a polymorphic convenience function to abstract away the rank and
 /// concrete type of `val`.
 /// Asserts that `val` is a memref or tensor type.
-Value createOrFoldDimOp(OpBuilder &b, Location loc, Value val, int64_t dim);
+Value createOrFoldDimOp(OpBuilder &b, Location loc, Value source, int64_t dim);
 
 /// Create one memref::DimOp or tensor::DimOp depending on the type of `val`.
 /// This is a polymorphic convenience function to abstract away the rank and
 /// concrete type of `val`.
 /// Asserts that `val` is a memref or tensor type.
-OpFoldResult createFoldedDimOp(OpBuilder &b, Location loc, Value val,
+OpFoldResult createFoldedDimOp(OpBuilder &b, Location loc, Value source,
                                int64_t dim);
 
 } // namespace linalg

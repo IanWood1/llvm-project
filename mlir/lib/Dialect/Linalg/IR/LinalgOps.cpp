@@ -22,6 +22,7 @@
 #include "mlir/Dialect/SCF/IR/SCF.h"
 #include "mlir/Dialect/SparseTensor/IR/SparseTensor.h"
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "mlir/Dialect/Tensor/Utils/Utils.h"
 #include "mlir/Dialect/Utils/IndexingUtils.h"
 #include "mlir/Dialect/Utils/ReshapeOpsUtils.h"
 #include "mlir/Dialect/Utils/StaticValueUtils.h"
@@ -34,6 +35,7 @@
 #include "mlir/IR/OperationSupport.h"
 #include "mlir/IR/PatternMatch.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
+#include "mlir/Support/LLVM.h"
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallSet.h"
@@ -88,6 +90,15 @@ static Value getSlice(OpBuilder &b, Location loc, Value source,
 
 Value linalg::createOrFoldDimOp(OpBuilder &b, Location loc, Value source,
                                 int64_t dim) {
+  if (auto *dimTrackingListener =
+          dyn_cast_or_null<tensor::TensorDimTrackingRewriter>(
+              b.getListener())) {
+    FailureOr<tensor::DimOp> dimOp =
+        dimTrackingListener->queryCachedDimOps(source, dim);
+    if (succeeded(dimOp)) {
+      return dimOp->getResult();
+    }
+  }
   if (llvm::isa<UnrankedMemRefType, MemRefType>(source.getType()))
     return b.createOrFold<memref::DimOp>(loc, source, dim);
   if (llvm::isa<UnrankedTensorType, RankedTensorType>(source.getType()))
