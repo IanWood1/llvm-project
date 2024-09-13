@@ -10,6 +10,7 @@
 #define MLIR_DIALECT_TENSOR_UTILS_UTILS_H_
 
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
+#include "llvm/ADT/SmallPtrSet.h"
 
 namespace mlir {
 namespace tensor {
@@ -59,6 +60,21 @@ bool isCastLikeInsertSliceOp(InsertSliceOp op);
 /// A tensor.extract_slice is a cast-like operation if it merely rank-reduces
 /// unit dimensions of the source tensor or extracts the entire source tensor.
 bool isCastLikeExtractSliceOp(ExtractSliceOp op);
+
+class TensorDimTrackingRewriter : public IRRewriter, IRRewriter::Listener {
+public:
+  /// Create a new rewriter: Scan the given op for tensor::DimOps.
+  TensorDimTrackingRewriter(Operation *op);
+  /// Return all tracked tensor::DimOps.
+  SmallVector<tensor::DimOp> getTensorDimOps();
+
+protected:
+  void notifyOperationErased(Operation *op) override;
+  void notifyOperationInserted(Operation *op, InsertPoint previous) override;
+
+private:
+  SmallPtrSet<Operation *, 16> dimOps;
+};
 
 } // namespace tensor
 } // namespace mlir

@@ -174,3 +174,31 @@ bool mlir::tensor::isCastLikeExtractSliceOp(ExtractSliceOp op) {
 
   return true;
 }
+
+mlir::tensor::TensorDimTrackingRewriter::TensorDimTrackingRewriter(
+    Operation *op)
+    : IRRewriter(op->getContext()) {
+  setListener(this);
+  op->walk([&](tensor::DimOp dimOp) { dimOps.insert(dimOp.getOperation()); });
+}
+
+SmallVector<tensor::DimOp>
+mlir::tensor::TensorDimTrackingRewriter::getTensorDimOps() {
+  SmallVector<tensor::DimOp> result;
+  for (Operation *op : dimOps)
+    result.push_back(cast<tensor::DimOp>(op));
+  return result;
+}
+void mlir::tensor::TensorDimTrackingRewriter::notifyOperationErased(
+    Operation *op) {
+  IRRewriter::Listener::notifyOperationErased(op);
+  if (isa<tensor::DimOp>(op))
+    dimOps.erase(op);
+}
+
+void mlir::tensor::TensorDimTrackingRewriter::notifyOperationInserted(
+    Operation *op, InsertPoint previous) {
+  IRRewriter::Listener::notifyOperationInserted(op, previous);
+  if (isa<tensor::DimOp>(op))
+    dimOps.insert(op);
+}
