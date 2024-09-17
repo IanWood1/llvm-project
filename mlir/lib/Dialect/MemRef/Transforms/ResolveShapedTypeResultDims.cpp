@@ -21,6 +21,7 @@
 #include "mlir/Dialect/Tensor/IR/Tensor.h"
 #include "mlir/Interfaces/InferTypeOpInterface.h"
 #include "mlir/Transforms/GreedyPatternRewriteDriver.h"
+#include "llvm/ADT/STLExtras.h"
 
 namespace mlir {
 namespace memref {
@@ -103,6 +104,57 @@ struct DimOfReifyRankedShapedTypeOpInterface : public OpRewritePattern<OpTy> {
     return success();
   }
 };
+
+template <typename OpTy>
+struct FoldDuplicateDimOps : public OpRewritePattern<OpTy> {
+  using OpRewritePattern<OpTy>::OpRewritePattern;
+
+  void initialize() { OpRewritePattern<OpTy>::setHasBoundedRewriteRecursion(); }
+
+  LogicalResult matchAndRewrite(OpTy dimOp,
+                                PatternRewriter &rewriter) const override {
+    std::optional<int64_t> dimIndex = dimOp.getConstantIndex();
+    if (!dimIndex)
+      return failure();
+
+    auto redundantDimOps = llvm::make_filter_range(
+        dimOp.getSource().getUsers(), [&](Operation *use) -> bool {
+          if (use == dimOp) {
+            return true;
+          }
+          auto dimOpUse = dyn_cast_or_null<OpTy>(use);
+          if (!dimOpUse) {
+            return false;
+          }
+          if (!dimOpUse.getConstantIndex().has_value() ||
+              !dimOp.getConstantIndex().has_value()) {
+            return false;
+          }
+          return dimOpUse.getSource() == dimOp.getSource() &&
+                 dimOpUse.getConstantIndex().value() ==
+                     dimOp.getConstantIndex().value();
+        });
+
+    if (llvm::hasSingleElement(redundantDimOps))
+      return failure();
+
+    IRRewriter::InsertionGuard g(rewriter);
+    rewriter.setInsertionPointAfterValue(dimOp.getSource());
+    auto replacement = rewriter.create<OpTy>(dimOp.getLoc(), dimOp.getSource(),
+                                             dimIndex.value());
+    llvm::DenseSet<Operation *> seen;
+    for (Operation *op : redundantDimOps) {
+      if (seen.contains(op))
+        continue;
+      seen.insert(op);
+      rewriter.replaceAllOpUsesWith(op, replacement);
+      rewriter.eraseOp(op);
+    }
+    llvm::dbgs() << "success!\n";
+    return success();
+  }
+};
+
 } // namespace
 
 //===----------------------------------------------------------------------===//
@@ -127,8 +179,8 @@ struct ResolveShapedTypeResultDimsPass final
 void memref::populateResolveRankedShapedTypeResultDimsPatterns(
     RewritePatternSet &patterns) {
   patterns.add<DimOfReifyRankedShapedTypeOpInterface<memref::DimOp>,
-               DimOfReifyRankedShapedTypeOpInterface<tensor::DimOp>>(
-      patterns.getContext());
+               DimOfReifyRankedShapedTypeOpInterface<tensor::DimOp>,
+               FoldDuplicateDimOps<tensor::DimOp>>(patterns.getContext());
 }
 
 void memref::populateResolveShapedTypeResultDimsPatterns(
