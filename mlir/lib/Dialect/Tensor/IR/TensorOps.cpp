@@ -21,6 +21,7 @@
 #include "mlir/IR/IRMapping.h"
 #include "mlir/IR/Matchers.h"
 #include "mlir/IR/OpDefinition.h"
+#include "mlir/IR/PatternMatch.h"
 #include "mlir/IR/TypeUtilities.h"
 #include "mlir/Interfaces/DestinationStyleOpInterface.h"
 #include "mlir/Interfaces/LoopLikeInterface.h"
@@ -1982,6 +1983,43 @@ struct FoldDimOfCollapseShape : public OpRewritePattern<DimOp> {
     return success();
   }
 };
+
+struct FoldCastOfExpandOp : public OpRewritePattern<CastOp> {
+  using OpRewritePattern<CastOp>::OpRewritePattern;
+
+  LogicalResult matchAndRewrite(CastOp castOp,
+                                PatternRewriter &rewriter) const override {
+    auto expandOp = castOp.getSource().getDefiningOp<tensor::ExpandShapeOp>();
+    if (!expandOp || !canFoldIntoProducerOp(castOp))
+      return failure();
+
+    RankedTensorType oldResultType =
+        llvm::cast<RankedTensorType>(castOp.getSource().getType());
+    RankedTensorType newResultType =
+        llvm::cast<RankedTensorType>(castOp.getType());
+
+    auto it = expandOp.getOutputShape().begin();
+    SmallVector<Value> newOutputShape;
+    uint64_t seenDynDims = 0;
+    for (auto [oldSize, newSize] :
+         llvm::zip_equal(oldResultType.getShape(), newResultType.getShape())) {
+      if (!ShapedType::isDynamic(oldSize)) {
+        continue;
+      }
+      if (ShapedType::isDynamic(newSize)) {
+        newOutputShape.push_back(*it);
+      }
+      ++it;
+    }
+    auto resultSizes =
+        getMixedValues(newResultType.getShape(), newOutputShape, rewriter);
+
+    rewriter.replaceOpWithNewOp<ExpandShapeOp>(
+        castOp, newResultType, expandOp.getSrc(),
+        expandOp.getReassociationIndices(), resultSizes);
+    return success();
+  }
+};
 } // namespace
 
 void ExpandShapeOp::getCanonicalizationPatterns(RewritePatternSet &results,
@@ -1989,7 +2027,7 @@ void ExpandShapeOp::getCanonicalizationPatterns(RewritePatternSet &results,
   results.add<
       ComposeReassociativeReshapeOps<ExpandShapeOp, ReshapeOpKind::kExpand>,
       ComposeExpandOfCollapseOp<ExpandShapeOp, CollapseShapeOp>,
-      FoldReshapeWithConstant<ExpandShapeOp>,
+      FoldCastOfExpandOp, FoldReshapeWithConstant<ExpandShapeOp>,
       FoldReshapeWithSplat<ExpandShapeOp>,
       FoldReshapeWithFromElements<ExpandShapeOp>, FoldDimOfExpandShape,
       FoldDimOfCollapseShape>(context);
