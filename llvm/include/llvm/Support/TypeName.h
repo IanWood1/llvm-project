@@ -10,6 +10,7 @@
 #define LLVM_SUPPORT_TYPENAME_H
 
 #include "llvm/ADT/StringRef.h"
+#include <string_view>
 
 namespace llvm {
 
@@ -23,18 +24,20 @@ namespace llvm {
 /// The returned StringRef will point into a static storage duration string.
 /// However, it may not be null terminated and may be some strangely aligned
 /// inner substring of a larger string.
-template <typename DesiredTypeName>
-inline StringRef getTypeName() {
+template <typename DesiredTypeName> inline StringRef getTypeName() {
 #if defined(__clang__) || defined(__GNUC__)
-  StringRef Name = __PRETTY_FUNCTION__;
+  constexpr StringRef Name = __PRETTY_FUNCTION__;
+  constexpr StringRef Key = "DesiredTypeName = ";
+  constexpr StringRef Res = [](std::string_view Name, std::string_view Key) {
+    Name = Name.substr(Name.find(Key));
+    assert(!Name.empty() && "Unable to find the template parameter!");
+    Name = Name.substr(Key.size());
 
-  StringRef Key = "DesiredTypeName = ";
-  Name = Name.substr(Name.find(Key));
-  assert(!Name.empty() && "Unable to find the template parameter!");
-  Name = Name.drop_front(Key.size());
-
-  assert(Name.ends_with("]") && "Name doesn't end in the substitution key!");
-  return Name.drop_back(1);
+    assert(Name.back() == ']' && "Name doesn't end in the substitution key!");
+    Name.remove_prefix(1);
+    return Name;
+  }(Name, Key);
+  return Res;
 #elif defined(_MSC_VER)
   StringRef Name = __FUNCSIG__;
 
