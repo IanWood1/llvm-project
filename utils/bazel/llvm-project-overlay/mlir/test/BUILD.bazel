@@ -715,6 +715,8 @@ cc_library(
     deps = [
         "//llvm:NVPTXCodeGen",
         "//llvm:Support",
+        "//mlir:AMDGPUDialect",
+        "//mlir:AMDGPUUtils",
         "//mlir:AffineDialect",
         "//mlir:AffineToStandard",
         "//mlir:ArithDialect",
@@ -738,6 +740,7 @@ cc_library(
         "//mlir:NVVMToLLVM",
         "//mlir:NVVMToLLVMIRTranslation",
         "//mlir:Pass",
+        "//mlir:ROCDLDialect",
         "//mlir:ROCDLToLLVMIRTranslation",
         "//mlir:ReconcileUnrealizedCasts",
         "//mlir:SCFDialect",
