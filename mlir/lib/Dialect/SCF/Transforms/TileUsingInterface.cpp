@@ -2237,6 +2237,14 @@ mlir::scf::tileAndFuseConsumerOfSlices(
                        "of consumer operand(s)");
   }
 
+  if(llvm::count_if(consumerOp->getOpOperands(), [&](OpOperand &operand) {
+        return operand.get().getDefiningOp() == outerMostLoop;
+      }) > 1) {
+    return rewriter.notifyMatchFailure(
+        consumerOp,
+        "consumer op has multiple operands from the same producer loop");
+  }
+
   OpBuilder::InsertionGuard g(rewriter);
 
   // 2. Check consumer is not using scf loop's output as init.
