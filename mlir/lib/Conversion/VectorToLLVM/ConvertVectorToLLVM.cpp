@@ -121,12 +121,18 @@ LogicalResult getVectorToLLVMAlignment(const LLVMTypeConverter &typeConverter,
   return success();
 }
 
-// Check if the last stride is non-unit and has a valid memory space.
+// Check if the memref type is supported for gather/scatter lowering to LLVM.
+// Requires unit stride in the last dimension, a valid memory space, and a
+// contiguous (identity) layout. Non-contiguous memrefs (e.g. strided subviews)
+// are rejected because gather/scatter indices are flat element offsets that
+// assume contiguous row-major layout.
 static LogicalResult isMemRefTypeSupported(MemRefType memRefType,
                                            const LLVMTypeConverter &converter) {
   if (!memRefType.isLastDimUnitStride())
     return failure();
   if (failed(converter.getMemRefAddressSpace(memRefType)))
+    return failure();
+  if (!memRefType.getLayout().isIdentity())
     return failure();
   return success();
 }
